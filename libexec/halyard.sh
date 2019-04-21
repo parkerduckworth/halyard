@@ -71,11 +71,11 @@ display() {
 # Load (via rsync) the currenty directory's files into toplevel
 # container.
 load_container() {
-  local files="$@"
+  local files=("$@")
   local file_array=()
 
-  for file in "${files}"; do
-    if [[ ! -f "${file}" ]] || [[ ! -d "${file}" ]]; then
+  for file in "${files[@]}"; do
+    if [[ ! -f "${file}" ]] && [[ ! -d "${file}" ]]; then
       printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
       exit 1
     fi
@@ -147,8 +147,8 @@ load() {
   touch "${CONTAINER_PATH}"/.paths
 
   if [[ -d "${args}" ]]; then
-    echo "Preparing contents of ${PWD##*/}..."
     pushd "${args}" >/dev/null 2>&1
+    echo "Preparing contents of ${PWD##*/}..."
     # Since provided target is a dir, set target to its contents
     target_location=("$(pwd)"/*)
   else
@@ -169,7 +169,7 @@ load() {
 
   # Everything went well, mark status as loaded
   STATUS="LOADED"
-  
+
   cat "${HALYARD_PATH}/images/logo"
   display "${target[@]}"
 }
