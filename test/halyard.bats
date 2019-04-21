@@ -13,6 +13,13 @@ load test_helper
   [ $(expr "${lines[0]}" : "usage:") -ne 0 ]
 }
 
+@test "init creates \`yard\` directory" {
+  run halyard init
+  [ "$status" -eq 0 ]
+  [ -d "yard" ]
+  rm -R "yard"
+}
+
 @test "load called with directory" {
   run halyard load testfiles
   [ "$status" -eq 0 ]
