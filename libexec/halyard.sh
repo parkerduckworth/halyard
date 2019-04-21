@@ -74,8 +74,12 @@ load_container() {
   local files="$@"
   local file_array=()
 
-  for file in $files; do
-    rsync -a ${file} ${CONTAINER_PATH}
+  for file in "${files}"; do
+    if [[ ! -f "${file}" ]] || [[ ! -d "${file}" ]]; then
+      printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
+      exit 1
+    fi
+    rsync -a "${file}" "${CONTAINER_PATH}"
     file_array+=("${file}")
   done
 }
@@ -139,8 +143,6 @@ load() {
     exit 1
   fi
 
-  cat "${HALYARD_PATH}/images/logo"
-
   # Metadata for contained files
   touch "${CONTAINER_PATH}"/.paths
 
@@ -165,8 +167,10 @@ load() {
   load_container "${target[@]}"
   popd >/dev/null 2>&1 || true
 
-  # Everything went well, mark status as loaded.
+  # Everything went well, mark status as loaded
   STATUS="LOADED"
+  
+  cat "${HALYARD_PATH}/images/logo"
   display "${target[@]}"
 }
 
