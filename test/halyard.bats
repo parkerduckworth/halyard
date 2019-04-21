@@ -7,47 +7,77 @@ load test_helper
   [ "$status" -eq 0 ]
 }
 
-@test "load called with directory: no requested overwrite permission" {
-  run halyard -y load testfiles
-  [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
+@test "halyard executed without args" {
+  run halyard
+  [ "$status" -eq 1 ]
+  [ $(expr "${lines[0]}" : "usage:") -ne 0 ]
 }
 
-@test "load called with directory: requested overwrite permission" {
+@test "load called with directory" {
   run halyard load testfiles
-  yes | run halyard load testfiles
   [ "$status" -eq 0 ]
+  [ -f "${CONTAINER_PATH}"/test.cpp ]
+  [ -f "${CONTAINER_PATH}"/test.hpp ]
+  [ -f "${CONTAINER_PATH}"/.paths ]
   rm "${CONTAINER_PATH}"/test.cpp
   rm "${CONTAINER_PATH}"/test.hpp
+  rm "${CONTAINER_PATH}"/.paths
 }
 
-@test "load called with single file: no requested overwrite permission" {
-  run halyard -y load testfiles/test.cpp
-  [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-}
-
-@test "load called with single file: requested overwrite permission" {
+@test "load called with single file" {
   run halyard load testfiles/test.cpp
-  yes | run halyard load testfiles/test.cpp
   [ "$status" -eq 0 ]
+  [ -f "${CONTAINER_PATH}"/test.cpp ]
+  [ -f "${CONTAINER_PATH}"/.paths ]
   rm "${CONTAINER_PATH}"/test.cpp
+  rm "${CONTAINER_PATH}"/.paths
 }
 
-@test "load called with multiple files: no requested overwrite permission" {
-  run halyard -y load testfiles/test.cpp testfiles/test.hpp
-  [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-}
-
-@test "load called with multiple files: requested overwrite permission" {
+@test "load called with multiple files" {
   run halyard load testfiles/test.cpp testfiles/test.hpp
-  yes | run halyard load testfiles/test.cpp testfiles/test.hpp
+  [ "$status" -eq 0 ]
+  [ -f "${CONTAINER_PATH}"/test.cpp ]
+  [ -f "${CONTAINER_PATH}"/test.hpp ]
+  [ -f "${CONTAINER_PATH}"/.paths ]
+  rm "${CONTAINER_PATH}"/test.cpp
+  rm "${CONTAINER_PATH}"/test.hpp
+  rm "${CONTAINER_PATH}"/.paths
+}
+
+@test "peek called on loaded container" {
+  run halyard load testfiles
+  run halyard peek
   [ "$status" -eq 0 ]
   rm "${CONTAINER_PATH}"/test.cpp
   rm "${CONTAINER_PATH}"/test.hpp
+  rm "${CONTAINER_PATH}"/.paths
+}
+
+@test "unload called on loaded container" {
+  run halyard load testfiles
+  run halyard unload
+  [ ! -f "${CONTAINER_PATH}"/test.cpp ]
+  [ ! -f "${CONTAINER_PATH}"/test.hpp ]
+  [ ! -f "${CONTAINER_PATH}"/.paths ]
+  [ "$status" -eq 0 ]
+}
+
+@test "reload called on loaded container" {
+  run halyard load testfiles
+  run halyard reload
+  [ "$status" -eq 0 ]
+  rm "${CONTAINER_PATH}"/test.cpp
+  rm "${CONTAINER_PATH}"/test.hpp
+  rm "${CONTAINER_PATH}"/.paths
+}
+
+@test "run called on loaded container" {
+  run halyard load testfiles
+  run halyard run
+  [ "$status" -eq 0 ]
+  rm "${CONTAINER_PATH}"/test.cpp
+  rm "${CONTAINER_PATH}"/test.hpp
+  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "load called without args: usage displayed and exit status 1" {
@@ -56,10 +86,22 @@ load test_helper
   [ $(expr "${lines[0]}" : "usage:") -ne 0 ]
 }
 
-@test "halyard executed without args: usage displayed and exit status 1" {
-  run halyard
+@test "peek called on empty container: exit status 1" {
+  run halyard peek
   [ "$status" -eq 1 ]
-  [ $(expr "${lines[0]}" : "usage:") -ne 0 ]
 }
 
+@test "unload called on empty container: exit status 1" {
+  run halyard unload
+  [ "$status" -eq 1 ]
+}
 
+@test "reload called on empty container: exit status 1" {
+  run halyard reload
+  [ "$status" -eq 1 ]
+}
+
+@test "run called on empty container: exit status 1" {
+  run halyard run
+  [ "$status" -eq 1 ]
+}

@@ -68,14 +68,14 @@ display() {
   printf "\n"
 }
 
-# Load (via cp) the currenty directory's files into toplevel
+# Load (via rsync) the currenty directory's files into toplevel
 # container.
 load_container() {
   local files="$@"
   local file_array=()
 
   for file in $files; do
-    cp -R ${file} ${CONTAINER_PATH}
+    rsync -a ${file} ${CONTAINER_PATH}
     file_array+=("${file}")
   done
 }
@@ -123,6 +123,7 @@ peek() {
   else
     printf "\n${HALYARD_SAYS_NO} \`peek\` called on an empty vessel...\n"
     printf "${HALYARD_SAYS} try to \`load\` the vessel before the next \`run\`...\n\n"
+    exit 1
   fi
 }
 
@@ -209,7 +210,15 @@ unload() {
   done
 }
 
+# Updates files that are currently loaded in container 
+# with any changes to their source files
 reload() {
+  if [[ ! -f "${CONTAINER_PATH}"/.paths ]]; then
+    printf "\n${HALYARD_SAYS_NO} \`reload\` called on an empty vessel...\n"
+    printf "${HALYARD_SAYS} vessel must be \`load[ed]\` before it can be \`reload[ed]\`...\n\n"
+    exit 1
+  fi
+
   local path_array=()
   while read path; do
     path_array+=("${path}")
@@ -265,13 +274,15 @@ run() {
 
 # Starts Docker if not already running
 docker_start() {
-  open --background -a Docker &&
-    if ! docker system info >/dev/null 2>&1; then
-      echo "Staring Docker..." &&
-        while ! docker system info >/dev/null 2>&1; do
-          sleep 1
-        done
-    fi
+  open --background -a Docker >/dev/null 2>&1 || 
+    (printf "\n${HALYARD_SAYS_NO} Docker not found\n\n" && exit 1)
+
+  if ! docker system info >/dev/null 2>&1; then
+    echo "Staring Docker..." &&
+      while ! docker system info >/dev/null 2>&1; do
+        sleep 1
+      done
+  fi
 }
 
 # Runs Memcheck in a Docker container instance
