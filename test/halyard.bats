@@ -26,9 +26,6 @@ load test_helper
   [ -f "${CONTAINER_PATH}"/test.cpp ]
   [ -f "${CONTAINER_PATH}"/test.hpp ]
   [ -f "${CONTAINER_PATH}"/.paths ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "load called with single file" {
@@ -36,8 +33,6 @@ load test_helper
   [ "$status" -eq 0 ]
   [ -f "${CONTAINER_PATH}"/test.cpp ]
   [ -f "${CONTAINER_PATH}"/.paths ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "load called with multiple files" {
@@ -46,18 +41,12 @@ load test_helper
   [ -f "${CONTAINER_PATH}"/test.cpp ]
   [ -f "${CONTAINER_PATH}"/test.hpp ]
   [ -f "${CONTAINER_PATH}"/.paths ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "peek called on loaded container" {
   run halyard load testfiles
   run halyard peek
   [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "unload called on loaded container" {
@@ -73,18 +62,12 @@ load test_helper
   run halyard load testfiles
   run halyard reload
   [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "run called on loaded container" {
   run halyard load testfiles
   run halyard run
   [ "$status" -eq 0 ]
-  rm "${CONTAINER_PATH}"/test.cpp
-  rm "${CONTAINER_PATH}"/test.hpp
-  rm "${CONTAINER_PATH}"/.paths
 }
 
 @test "load called without args: usage displayed and exit status 1" {
