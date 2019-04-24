@@ -68,14 +68,18 @@ display() {
   printf "\n"
 }
 
-# Load (via cp) the currenty directory's files into toplevel
+# Load (via rsync) the currenty directory's files into toplevel
 # container.
 load_container() {
-  local files="$@"
+  local files=("$@")
   local file_array=()
 
-  for file in $files; do
-    cp -R ${file} ${CONTAINER_PATH}
+  for file in "${files[@]}"; do
+    if [[ ! -f "${file}" ]] && [[ ! -d "${file}" ]]; then
+      printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
+      exit 1
+    fi
+    rsync -a "${file}" "${CONTAINER_PATH}"
     file_array+=("${file}")
   done
 }
@@ -123,6 +127,7 @@ peek() {
   else
     printf "\n${HALYARD_SAYS_NO} \`peek\` called on an empty vessel...\n"
     printf "${HALYARD_SAYS} try to \`load\` the vessel before the next \`run\`...\n\n"
+    exit 1
   fi
 }
 
@@ -138,14 +143,12 @@ load() {
     exit 1
   fi
 
-  cat "${HALYARD_PATH}/images/logo"
-
   # Metadata for contained files
   touch "${CONTAINER_PATH}"/.paths
 
   if [[ -d "${args}" ]]; then
-    echo "Preparing contents of ${PWD##*/}..."
     pushd "${args}" >/dev/null 2>&1
+    echo "Preparing contents of ${PWD##*/}..."
     # Since provided target is a dir, set target to its contents
     target_location=("$(pwd)"/*)
   else
@@ -164,8 +167,10 @@ load() {
   load_container "${target[@]}"
   popd >/dev/null 2>&1 || true
 
-  # Everything went well, mark status as loaded.
+  # Everything went well, mark status as loaded
   STATUS="LOADED"
+
+  cat "${HALYARD_PATH}/images/logo"
   display "${target[@]}"
 }
 
@@ -209,7 +214,15 @@ unload() {
   done
 }
 
+# Updates files that are currently loaded in container 
+# with any changes to their source files
 reload() {
+  if [[ ! -f "${CONTAINER_PATH}"/.paths ]]; then
+    printf "\n${HALYARD_SAYS_NO} \`reload\` called on an empty vessel...\n"
+    printf "${HALYARD_SAYS} vessel must be \`load[ed]\` before it can be \`reload[ed]\`...\n\n"
+    exit 1
+  fi
+
   local path_array=()
   while read path; do
     path_array+=("${path}")
@@ -265,13 +278,15 @@ run() {
 
 # Starts Docker if not already running
 docker_start() {
-  open --background -a Docker &&
-    if ! docker system info >/dev/null 2>&1; then
-      echo "Staring Docker..." &&
-        while ! docker system info >/dev/null 2>&1; do
-          sleep 1
-        done
-    fi
+  open --background -a Docker >/dev/null 2>&1 || 
+    (printf "\n${HALYARD_SAYS_NO} Docker not found\n\n" && exit 1)
+
+  if ! docker system info >/dev/null 2>&1; then
+    echo "Staring Docker..." &&
+      while ! docker system info >/dev/null 2>&1; do
+        sleep 1
+      done
+  fi
 }
 
 # Runs Memcheck in a Docker container instance

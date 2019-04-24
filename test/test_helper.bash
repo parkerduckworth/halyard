@@ -6,6 +6,7 @@ setup() {
 }
 
 teardown() {
-  rm "${CONTAINER_PATH}/test.cpp" || true
-  rm "${CONTAINER_PATH}/test.hpp" || true
+  rm -f "${CONTAINER_PATH}"/test.cpp
+  rm -f "${CONTAINER_PATH}"/test.hpp
+  rm -f "${CONTAINER_PATH}"/.paths
 }
