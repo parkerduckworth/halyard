@@ -68,22 +68,6 @@ display() {
   printf "\n"
 }
 
-# Load (via rsync) the currenty directory's files into toplevel
-# container.
-load_container() {
-  local files=("$@")
-  local file_array=()
-
-  for file in "${files[@]}"; do
-    if [[ ! -f "${file}" ]] && [[ ! -d "${file}" ]]; then
-      printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
-      exit 1
-    fi
-    rsync -a "${file}" "${CONTAINER_PATH}"
-    file_array+=("${file}")
-  done
-}
-
 # Write the passed absolute path to container/.paths
 # if it is not already there
 save_file_paths_as_metadata() {
@@ -135,11 +119,15 @@ peek() {
 # docker container.
 load() {
   local args=("$@")
-  local target=()
+  local loaded_files=()
   local target_location=()
 
   if [[ "${#args[@]}" -eq 0 ]]; then
     echo "usage: halyard load [<dir> | <file> | <file 1> ... <file n>]"
+    exit 1
+  elif [[ -f "${CONTAINER_PATH}"/.paths ]]; then
+    printf "\n${HALYARD_SAYS_NO} the vessel is already loaded...\n"
+    printf "${HALYARD_SAYS} use \`reload\` to update any changes, or \`unload\` to start over\n\n"
     exit 1
   fi
 
@@ -159,19 +147,26 @@ load() {
   # Accumulate the targets and save their paths for reference
   for file in "${target_location[@]}"; do
     local file_path="$(get_abs_path ${file})"
-    target+=("${file_path}")
-    save_file_paths_as_metadata "${file_path}"
+    if [[ ! -f "${file}" ]] && [[ ! -d "${file}" ]]; then
+      printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
+      rm "${CONTAINER_PATH}"/.paths
+      exit 1
+    fi
+    # CMakeCache.txt contains information relevant only to build location
+    if [[ "${file##*/}" != "CMakeCache.txt" ]]; then
+      rsync -a "${file_path}" "${CONTAINER_PATH}"
+      loaded_files+=("${file_path}")
+      save_file_paths_as_metadata "${file_path}"
+    fi
   done
 
-  # Copy this directory's files into container.
-  load_container "${target[@]}"
   popd >/dev/null 2>&1 || true
 
   # Everything went well, mark status as loaded
   STATUS="LOADED"
 
   cat "${HALYARD_PATH}/images/logo"
-  display "${target[@]}"
+  display "${loaded_files[@]}"
 }
 
 # Removes files that are currently loaded in container.
@@ -223,15 +218,23 @@ reload() {
     exit 1
   fi
 
-  local path_array=()
-  while read path; do
-    path_array+=("${path}")
+  local loaded_files=()
+  while read metadata; do
+    loaded_files+=("${metadata}")
   done < "${CONTAINER_PATH}"/.paths
-
-  load_container "${path_array[@]}"
+  
+  for file in "${loaded_files[@]}"; do
+    # If file changes in any way (name, deleted) it will not successfully load
+    if [[ ! -f "${file}" ]] && [[ ! -d "${file}" ]]; then
+      printf "\n${HALYARD_SAYS_NO} ${file} does not exist\n\n"
+      exit 1
+    fi
+    # CMakeCache.txt contains information relevant only to build location
+    rsync -a "${file}" "${CONTAINER_PATH}"
+  done
 
   STATUS="LOADED"
-  display "${path_array[@]}"
+  display "${loaded_files[@]}"
 }
 
 run() {
@@ -241,8 +244,8 @@ run() {
   local target=()
   local extension
   local compiler
+  local make_type
   local file_count=0
-  local make_detected=false
 
   for file in "${CONTAINER_PATH}"/*; do
     extension="${file##*.}"
@@ -258,8 +261,11 @@ run() {
   done
 
   # Check for makefiles
-  if ls "${CONTAINER_PATH}" | grep -iq "makefile"; then
-    make_detected=true
+  if ls "${CONTAINER_PATH}" | grep -iq "CMake"; then
+    make_type="cmake"
+    ((file_count = file_count + 1))
+  elif ls "${CONTAINER_PATH}" | grep -iq "makefile"; then
+    make_type="makefile"
     ((file_count = file_count + 1))
   fi
 
@@ -271,8 +277,7 @@ run() {
   fi
 
   pushd $CONTAINER_PATH >/dev/null 2>&1
-  docker_run "${make_detected}" "${target[@]}"
-  rm memcheck
+  docker_run "${make_type}" "${target[@]}"
   popd >/dev/null 2>&1
 }
 
@@ -292,23 +297,54 @@ docker_start() {
 # Runs Memcheck in a Docker container instance
 # with the loaded files
 docker_run() {
-  local run_with_make="$1"
+  local make_type="$1"
   local files=("${@:2}")
+  local build_path
+  local exec_path
 
   # TODO: Redirect output, parse, and display for user
   # Runs a full leak check and displays results
-  if [ "$run_with_make" = true ]; then
-    printf "\n${HALYARD_SAYS} makefile detected\n"
-    printf "${HALYARD_SAYS} executable path: "; read exec_path; printf "\n"
-    docker run --rm -ti -v $PWD:/test halyard:0.1 bash -c \
-      "cd /test/; 
-       echo 'making ${exec_path}... ';
-       make && valgrind --leak-check=full ./${exec_path}"
-  else
+  if [[ -z "${make_type}" ]]; then
     docker run --rm -ti -v $PWD:/test halyard:0.1 bash -c \
       "cd /test/; 
        $compiler -o memcheck ${files[*]} &&
        valgrind --leak-check=full ./memcheck"
+       rm "memcheck" >/dev/null 2>&1 || true
+  else
+    if [[ "$make_type" = "cmake" ]]; then
+      local build_path="."
+      printf "\n${HALYARD_SAYS} cmake detected\n"
+      printf "${HALYARD_SAYS} out-of-place build? (y/n [n]) "; read input
+      if [[ "$input" = "y" ]]; then
+        printf "${HALYARD_SAYS} build directory: "; read build_path; printf "\n"
+      fi
+      printf "${HALYARD_SAYS} executable path: "; read exec_path; printf "\n"
+      if [[ -z "${exec_path}" ]]; then
+        printf "\n${HALYARD_SAYS_NO} \`run\` executable path must be provided...\n\n"
+        exit 1
+      fi
+
+      docker run --rm -ti -v $PWD:/test halyard:0.1 bash -c \
+        "cd /test/; 
+         echo 'making ${exec_path}... ';
+         cmake ${build_path};
+         make && valgrind --leak-check=full ./${exec_path}"
+
+    elif [[ "$make_type" = "makefile" ]]; then
+      printf "\n${HALYARD_SAYS} makefile detected\n"
+      printf "${HALYARD_SAYS} executable path: "; read exec_path; printf "\n"
+      if [[ -z "${exec_path}" ]]; then
+        printf "\n${HALYARD_SAYS_NO} \`run\` executable path must be provided...\n\n"
+        exit 1
+      fi
+
+      docker run --rm -ti -v $PWD:/test halyard:0.1 bash -c \
+        "cd /test/; 
+         echo 'making ${exec_path}... ';
+         make && valgrind --leak-check=full ./${exec_path}"
+
+    fi
+    rm "${CONTAINER_PATH}/${exec_path}" >/dev/null 2>&1 || true
   fi
 }
 
